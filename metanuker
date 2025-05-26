@@ -1,0 +1,92 @@
+#!/bin/bash
+
+if ! command -v exiv2 &> /dev/null; then
+  echo "Error: exiv2 is not installed."
+  exit 1
+fi
+
+help() {
+  echo "Usage:"
+  echo "  metanuker image.jpg               # Remove metadata from a single image"
+  echo "  metanuker -f /path/to/folder      # Remove metadata from all images in a folder"
+  echo "  metanuker -h                      # Show this help message"
+  echo "  Supported image types: .jpg, .jpeg, .png, .tif, .tiff "
+}
+
+metanuker() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    echo "Error: File '$file' does not exist or is not a regular file."
+    return 1
+  fi
+  if [[ ! -r "$file" ]]; then
+    echo "Error: File '$file' is not readable."
+    return 1
+  fi
+  echo "Removing metadata from: $file"
+  exiv2 rm "$file"
+}
+
+is_valid_image() {
+  local filename="$1"
+  shopt -s nocasematch
+  if [[ "$filename" =~ \.(jpg|jpeg|png|tif|tiff)$ ]]; then
+    shopt -u nocasematch
+    return 0
+  else
+    shopt -u nocasematch
+    return 1
+  fi
+}
+
+if [[ $# -eq 0 ]]; then
+  echo "Error: No arguments provided. Try running metanuker -h"
+  exit 1
+
+elif [[ $# -eq 1 ]]; then
+  case "$1" in
+    -h|--help)
+      help
+      exit 0
+      ;;
+    -*)
+      echo "Error: Invalid option '$1'. Try running metanuker -h"
+      exit 1
+      ;;
+    *)
+      if is_valid_image "$1"; then
+        metanuker "$1" || exit 1
+      else
+        echo "Error: '$1' is not a supported image file. Try running metanuker -h"
+        exit 1
+      fi
+      ;;
+  esac
+
+elif [[ $# -eq 2 ]]; then
+  if [[ "$1" == "-f" ]]; then
+    TARGET_DIR="$2"
+    if [[ ! -d "$TARGET_DIR" ]]; then
+      echo "Error: '$TARGET_DIR' is not a valid directory."
+      exit 1
+    fi
+
+    mapfile -t files < <(find "$TARGET_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tif" -o -iname "*.tiff" \))
+
+    if [[ ${#files[@]} -eq 0 ]]; then
+      echo "No supported image files found in provided directory. Try running metanuker -h for supported image types"
+      exit 0
+    fi
+
+    for img in "${files[@]}"; do
+      metanuker "$img" || echo "Failed to process $img"
+    done
+  else
+    echo "Error: Invalid option '$1'. Try running metanuker -h"
+    exit 1
+  fi
+
+else
+  echo "Error: Invalid arguments. Try running metanuker -h"
+  exit 1
+fi
